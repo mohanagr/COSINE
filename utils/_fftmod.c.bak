@@ -1,0 +1,94 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <omp.h>
+#include <complex.h>
+#include <fftw3.h>
+// gcc -shared -o libpfb.so -fPIC -fopenmp fftmod.c -lfftw3 -lm
+// void myfft(complex *input, complex *output, int64_t n)
+// {   
+//     if(fftw_init_threads()) {
+//         fftw_plan p;
+//         fftw_plan_with_nthreads(8);
+//         p = fftw_plan_dft_1d(n, input, output, FFTW_FORWARD, FFTW_ESTIMATE);
+//         fftw_execute(p);
+//         fftw_destroy_plan(p);
+//         fftw_cleanup_threads();
+//     }
+//     else {
+//         printf("something went wrong, sorry");
+//     }
+// }
+
+// void test(complex* input, complex* output, int64_t n){
+//     for(int i =0; i<n;i++){
+//         printf("r %f im %f \n",creal(input[i]),cimag(input[i]));
+//     }
+
+//     for(int i =0; i<n;i++){
+//         double complex z = i + I*i;
+//         output[i]= z;
+//     }
+// }
+
+void pfb(double *timestream, double *spectra, double *window, const int64_t nspec, const int64_t nchan, const int64_t ntap){
+    // printf("entered\n");
+    int64_t lblock = 2*nchan;
+    // double *pseudo_ts;
+    // pseudo_ts = (double *)malloc(sizeof(double)*lblock*nspec);
+    // init with 0
+    // #pragma omp parallel for
+    // for(int i=0; i<nspec; i++){
+    //     // printf("\n");
+    //     for(int j=0; j<lblock; j++){
+    //         pseudo_ts[i*lblock + j]=0;
+    //     }
+    // }
+    // printf("LBLOCK %ld, NTAP %ld, NSPEC %ld\n\n", lblock, ntap, nspec);
+    // for(int i=0; i<13; i++){
+    //     printf("\n");
+    //     for(int j=0; j<lblock; j++){
+    //         printf("%f ",timestream[i*lblock + j]);
+    //     }
+    // }
+    #pragma omp parallel for
+    for(int i=0; i<nspec; i++){
+        for(int j=0; j<lblock; j++){
+            // printf("going to access location (%d,%d)\n", i,j);
+            spectra[i*lblock + j]=0;
+            for(int k=0; k<ntap; k++){
+                // printf("going to add %f to location\n", timestream[(i+k)*lblock+j]*window[k*lblock+j]);
+                spectra[i*lblock + j] = spectra[i*lblock + j] + timestream[(i+k)*lblock+j]*window[k*lblock+j];
+            }
+        }
+    }
+    // for(int i=0; i<nspec; i++){
+    //     printf("\n");
+    //     for(int j=0; j<lblock; j++){
+    //         printf("%lf ",pseudo_ts[i*lblock + j]);
+    //     }
+    // }
+    // printf("\nreached the end\n");
+    if(fftw_init_threads()) {
+        fftw_plan p;
+        fftw_plan_with_nthreads(40);
+        int rank = 1; /* not 2: we are computing 1d transforms */
+        int n[] = {lblock}; /* 1d transforms of length 10 */
+        int n2[] = {lblock/2+1};
+        int howmany = nspec;
+        int idist = lblock, odist = lblock/2+1; /* gap b/w first elements of two consecutive transforms*/
+        int istride = 1, ostride = 1; /* gap b/w consecutive elements of one transform*/
+        int *inembed = NULL, *onembed = NULL;
+        // printf("istride %d, ostride %d, idist %d, odist %d", istride, ostride, idist, odist);
+        p = fftw_plan_many_dft_r2c(rank, n, howmany, spectra, inembed, istride, idist, (complex*)spectra, onembed, ostride, odist, FFTW_ESTIMATE);
+        fftw_execute(p);
+        fftw_destroy_plan(p);
+        fftw_cleanup_threads();
+    }
+    else {
+        printf("something went wrong, sorry");
+    }
+    // free(pseudo_ts);
+}
+    
+
