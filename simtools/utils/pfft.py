@@ -3,13 +3,10 @@ import numpy as np
 import os
 from contextlib import contextmanager
 
-mylib = ctypes.cdll.LoadLibrary(os.path.realpath(__file__ + r"/..") + "/libpfb.so")
+nb.config.THREADING_LAYER_PRIORITY = ["omp", "tbb", "workqueue"]
+NUM_CPU = os.cpu_count()
 
-# mylib.myfft.argtypes = [
-#     ctypes.c_void_p,
-#     ctypes.c_void_p,
-#     ctypes.c_int64
-# ]
+mylib = ctypes.cdll.LoadLibrary(os.path.realpath(__file__ + r"/..") + "/libpfb.so")
 
 mylib.test.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64]
 
@@ -22,21 +19,44 @@ mylib.pfb.argtypes = [
     ctypes.c_int64,
 ]
 
+mylib.fft_c2r_1d.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.c_int64,
+    ctypes.c_int,
+]
+
+mylib.fft_r2c_1d.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.c_int64,
+]
+
 mylib.set_threads.argtypes = [ctypes.c_int]
 
 
-# def fft(inp):
-#     n=inp.shape[0]
-#     output=np.empty(n,dtype="complex128",order="c")
-#     mylib.myfft(inp.ctypes.data,output.ctypes.data,n)
-#     return output
-
-
 @contextmanager
-def parallel_fft(nthreads):
+def parallelize_fft(nthreads):
     mylib.set_threads(nthreads)
     yield
     mylib.cleanup_threads()
+
+
+def rfft_1d(input):
+    n = input.shape[0]
+    output = np.empty(n // 2 + 1, dtype="complex128", order="c")
+    mylib.myfft(input.ctypes.data, output.ctypes.data, n)
+    return output
+
+
+def irfft_1d(input, preserve_input=0):
+    n = input.shape[0]
+    if n % 2 == 0:
+        raise ValueError("you're doing a complex to real rfft. n should've been odd?")
+    output = np.empty(2 * (n - 1), dtype="float64", order="c")
+    mylib.myfft(input.ctypes.data, output.ctypes.data, n, preserve_input)
+    return output
+
 
 def mytest():
     n = 4
@@ -59,28 +79,19 @@ def sinc_hanning(ntap, lblock):
     return np.hanning(ntap * lblock) * np.sinc(w / lblock)
 
 
-def very_fast_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
+def cpfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
     lblock = 2 * (nchan)
     w = window(ntap, lblock)
-    # w = np.ones(ntap*lblock,dtype="float64",order="c")
     nspec = timestream.size // lblock - (ntap - 1)
-    # spec=np.zeros((nspec,lblock))
-    # for bi in range(nspec):
-    #     # cut out the correct timestream section
-    #     spec[bi] = np.sum((timestream[bi*lblock:(bi+ntap)*lblock]*w).reshape(ntap,lblock),axis=0)
-    # test_op = np.fft.rfft(spec,axis=1)
     if nspec == int(nspec):
         nspec = int(nspec)
     else:
         raise Exception("nspec is {}, should be integer".format(nspec))
-    output = np.empty((nspec, lblock // 2 + 1), dtype="complex128", order="c")
+    output = np.empty((nspec, nchan + 1), dtype="complex128", order="c")
     mylib.pfb(
         timestream.ctypes.data, output.ctypes.data, w.ctypes.data, nspec, nchan, ntap
     )
-    # print(test_op-output)
     return output
-
-nb.config.THREADING_LAYER_PRIORITY = ["omp", "tbb", "workqueue"]
 
 
 def sinc_hanning(ntap, lblock):
@@ -89,7 +100,7 @@ def sinc_hanning(ntap, lblock):
     return np.hanning(ntap * lblock) * np.sinc(w / lblock)
 
 
-def slow_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
+def pypfb(timestream, nchan=2048, ntap=4, window=sinc_hanning, fast=False):
     # number of samples in a sub block
     lblock = 2 * (nchan)
     # number of blocks
@@ -100,42 +111,27 @@ def slow_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
         raise Exception("nblock is {}, should be integer".format(nblock))
 
     # initialize array for spectrum
-    spec = np.zeros((nblock, 2 * nchan), dtype=np.complex128)
+    spec = np.zeros((nblock, nchan + 1), dtype=np.complex128)
 
     # window function
     w = window(ntap, lblock)
 
-    def s(ts_sec):
-        return np.sum(
-            ts_sec.reshape(ntap, lblock), axis=0
-        )  # this is equivalent to sampling an ntap*lblock long fft - M
-
-    # iterate over blocks and perform PFB
-    for bi in range(nblock):
-        # cut out the correct timestream section
-        ts_sec = timestream[bi * lblock : (bi + ntap) * lblock].copy()
-
-        spec[bi] = np.fft.fft(s(ts_sec * w))
-
-    return spec
-
-
-def fast_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
-    # number of samples in a sub block
-    lblock = 2 * (nchan)
-    # number of blocks
-    nblock = timestream.size / lblock - (ntap - 1)
-    if nblock == int(nblock):
-        nblock = int(nblock)
+    if fast:
+        fill_blocks(spec, timestream, w, nblock, lblock, ntap)
+        with fft.set_workers(
+            NUM_CPU // 2
+        ):  # generally os.cpu_count() returns 2x physical cores
+            spec = fft.rfft(spec, axis=1)
     else:
-        raise Exception("nblock is {}, should be integer".format(nblock))
-
-    # initialize array for spectrum
-    spec = np.zeros((nblock, 2 * nchan), dtype="float64")
-    w = window(ntap, lblock)
-    fill_blocks(spec, timestream, w, nblock, lblock, ntap)
-    with fft.set_workers(40):
-        spec = fft.rfft(spec, axis=1)
+        for bi in range(nblock):
+            spec[bi] = np.fft.rfft(
+                np.sum(
+                    (timestream[bi * lblock : (bi + ntap) * lblock] * window).reshape(
+                        ntap, lblock
+                    ),
+                    axis=0,
+                )
+            )
     return spec
 
 

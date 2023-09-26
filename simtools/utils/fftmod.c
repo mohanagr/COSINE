@@ -23,7 +23,7 @@
 //     }
 // }
 
-int set_threaded(int nthreads)
+int set_threads(int nthreads)
 {
   if (nthreads<0) {
     nthreads=omp_get_num_threads();
@@ -37,22 +37,30 @@ int set_threaded(int nthreads)
   }
 }
 
-void fft_c2r_n(fftw_complex *datft,double *dat, int ndim,int *dims)
+void fft_c2r_1d(fftw_complex *datft,double *dat, int64_t n, int preserve_input)
 {
-
-  fftw_plan plan=fftw_plan_dft_c2r(ndim,dims,datft,dat,FFTW_FLAG);
+  fftw_plan plan;
+  if(preserve_input){
+    plan=fftw_plan_dft_c2r_1d(n,datft,dat,FFTW_FLAG|FFTW_PRESERVE_INPUT);
+  }
+  else{
+    plan=fftw_plan_dft_c2r_1d(n,datft,dat,FFTW_FLAG|FFTW_PRESERVE_INPUT);
+  }
   fftw_execute(plan);
   fftw_destroy_plan(plan);
   //apply the normalization so the inverse of the forward gives you what you started with
-  int64_t n=1;
-  for (int i=0;i<ndim;i++)
-    n*=dims[i];
-  double nn=n;
-  nn=1.0/n;
+  double nn=1.0/n;
   #pragma omp parallel for
   for (int64_t i=0;i<n;i++)
     dat[i]*=nn;
   
+}
+
+void fft_r2c_1d(double *dat, fftw_complex *datft, int64_t n)
+{
+  fftw_plan plan=fftw_plan_dft_r2c_1d(n, dat, datft, FFTW_FLAG);
+  fftw_execute(plan);
+  fftw_destroy_plan(plan);
 }
 
 void test(double* input, double* output, int64_t nrows, int64_t ncols){
