@@ -1,5 +1,20 @@
 import numpy as np
 
+class Spectra():
+    def __init__():
+        pass
+    
+    def populate():
+        pass
+    
+    def channelize():
+        pass
+    
+    def quantize():
+        pass
+    
+    def simulate():
+        pass
 
 def get_samples(delay, mult, k, dk, N=4096, plot=False):
     np.random.seed(42)

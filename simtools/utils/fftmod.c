@@ -4,6 +4,7 @@
 #include <omp.h>
 #include <complex.h>
 #include <fftw3.h>
+#define FFTW_FLAG FFTW_ESTIMATE
 //module load intel/2019u3  openmpi/4.0.1 fftw/3.3.10 python/3.8.5
 //icc -std=c99 -O3 -xHost -shared -o libpfb.so -fPIC -fopenmp fftmod.c -lfftw3_omp -lm
 //gcc -std=c99 -O3 -march=native -shared -o libpfb.so -fPIC -fopenmp fftmod.c -lfftw3_omp -lm
@@ -22,17 +23,36 @@
 //     }
 // }
 
-int set_threaded(int nthread)
+int set_threaded(int nthreads)
 {
-  if (nthread<0) {
-    nthread=omp_get_num_threads();
+  if (nthreads<0) {
+    nthreads=omp_get_num_threads();
   }
   if(fftw_init_threads()){
-    printf("Set FFTW to have %d threads.\n",nthread);
+    fftw_plan_with_nthreads(nthreads);
+    printf("Set FFTW to have %d threads.\n",nthreads);
   }
   else{
     printf("something went wrong during thread init");
   }
+}
+
+void fft_c2r_n(fftw_complex *datft,double *dat, int ndim,int *dims)
+{
+
+  fftw_plan plan=fftw_plan_dft_c2r(ndim,dims,datft,dat,FFTW_FLAG);
+  fftw_execute(plan);
+  fftw_destroy_plan(plan);
+  //apply the normalization so the inverse of the forward gives you what you started with
+  int64_t n=1;
+  for (int i=0;i<ndim;i++)
+    n*=dims[i];
+  double nn=n;
+  nn=1.0/n;
+  #pragma omp parallel for
+  for (int64_t i=0;i<n;i++)
+    dat[i]*=nn;
+  
 }
 
 void test(double* input, double* output, int64_t nrows, int64_t ncols){
@@ -80,7 +100,6 @@ void test(double* input, double* output, int64_t nrows, int64_t ncols){
 
 void pfb(double *timestream, double *spectra, double *window, const int64_t nspec, const int64_t nchan, const int64_t ntap){
     int64_t lblock = 2*nchan;
-    int nthreads = omp_get_num_threads();
     // double *pseudo_ts;
     // pseudo_ts = (double *)malloc(sizeof(double)*lblock*nspec);
     #pragma omp parallel for
@@ -95,7 +114,6 @@ void pfb(double *timestream, double *spectra, double *window, const int64_t nspe
         }
     }
         fftw_plan p;
-        fftw_plan_with_nthreads(nthreads);
         int n[] = {lblock}; /* 1d transforms of length 10 */
         p = fftw_plan_many_dft_r2c(1, n, nspec, spectra, NULL, 1, lblock+2, (fftw_complex *)spectra, NULL, 1, nchan+1, FFTW_ESTIMATE);
         fftw_execute(p);

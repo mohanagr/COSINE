@@ -38,7 +38,6 @@ def parallel_fft(nthreads):
     yield
     mylib.cleanup_threads()
 
-
 def mytest():
     n = 4
     # inp = np.zeros(n,dtype="complex128",order='c')
@@ -60,7 +59,7 @@ def sinc_hanning(ntap, lblock):
     return np.hanning(ntap * lblock) * np.sinc(w / lblock)
 
 
-def fast_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
+def very_fast_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
     lblock = 2 * (nchan)
     w = window(ntap, lblock)
     # w = np.ones(ntap*lblock,dtype="float64",order="c")
@@ -80,6 +79,75 @@ def fast_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
     )
     # print(test_op-output)
     return output
+
+nb.config.THREADING_LAYER_PRIORITY = ["omp", "tbb", "workqueue"]
+
+
+def sinc_hanning(ntap, lblock):
+    N = ntap * lblock
+    w = np.arange(0, N) - N / 2
+    return np.hanning(ntap * lblock) * np.sinc(w / lblock)
+
+
+def slow_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
+    # number of samples in a sub block
+    lblock = 2 * (nchan)
+    # number of blocks
+    nblock = timestream.size / lblock - (ntap - 1)
+    if nblock == int(nblock):
+        nblock = int(nblock)
+    else:
+        raise Exception("nblock is {}, should be integer".format(nblock))
+
+    # initialize array for spectrum
+    spec = np.zeros((nblock, 2 * nchan), dtype=np.complex128)
+
+    # window function
+    w = window(ntap, lblock)
+
+    def s(ts_sec):
+        return np.sum(
+            ts_sec.reshape(ntap, lblock), axis=0
+        )  # this is equivalent to sampling an ntap*lblock long fft - M
+
+    # iterate over blocks and perform PFB
+    for bi in range(nblock):
+        # cut out the correct timestream section
+        ts_sec = timestream[bi * lblock : (bi + ntap) * lblock].copy()
+
+        spec[bi] = np.fft.fft(s(ts_sec * w))
+
+    return spec
+
+
+def fast_pfb(timestream, nchan=2048, ntap=4, window=sinc_hanning):
+    # number of samples in a sub block
+    lblock = 2 * (nchan)
+    # number of blocks
+    nblock = timestream.size / lblock - (ntap - 1)
+    if nblock == int(nblock):
+        nblock = int(nblock)
+    else:
+        raise Exception("nblock is {}, should be integer".format(nblock))
+
+    # initialize array for spectrum
+    spec = np.zeros((nblock, 2 * nchan), dtype="float64")
+    w = window(ntap, lblock)
+    fill_blocks(spec, timestream, w, nblock, lblock, ntap)
+    with fft.set_workers(40):
+        spec = fft.rfft(spec, axis=1)
+    return spec
+
+
+@nb.njit(parallel=True)
+def fill_blocks(spec, timestream, window, nblock, lblock, ntap):
+    for bi in nb.prange(nblock):
+        spec[bi] = np.sum(
+            (timestream[bi * lblock : (bi + ntap) * lblock] * window).reshape(
+                ntap, lblock
+            ),
+            axis=0,
+        )
 
 
 if __name__ == "__main__":
