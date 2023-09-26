@@ -4,6 +4,7 @@ import concurrent.futures
 import numpy as np
 import time
 
+
 class MultithreadedRNG:
     def __init__(self, n, seed=None, threads=None):
         if threads is None:
@@ -11,8 +12,7 @@ class MultithreadedRNG:
         self.threads = threads
 
         seq = SeedSequence(seed)
-        self._random_generators = [default_rng(s)
-                                   for s in seq.spawn(threads)]
+        self._random_generators = [default_rng(s) for s in seq.spawn(threads)]
 
         self.n = n
         self.executor = concurrent.futures.ThreadPoolExecutor(threads)
@@ -25,11 +25,13 @@ class MultithreadedRNG:
 
         futures = {}
         for i in range(self.threads):
-            args = (_fill,
-                    self._random_generators[i],
-                    self.values,
-                    i * self.step,
-                    (i + 1) * self.step)
+            args = (
+                _fill,
+                self._random_generators[i],
+                self.values,
+                i * self.step,
+                (i + 1) * self.step,
+            )
             futures[self.executor.submit(*args)] = i
         concurrent.futures.wait(futures)
 
@@ -37,14 +39,14 @@ class MultithreadedRNG:
         self.executor.shutdown(False)
 
 
-if __name__=="__main__":
-	for i in range(1):
-		mrng = MultithreadedRNG(100000000, seed=12345)
-		#values = np.empty(100000000)
-		#rg = default_rng()
-		t1=time.time()
-		for i in range(100000):
-			mrng.fill()
-		#rg.standard_normal(out=values)
-		t2=time.time()
-		print((t2-t1)/100)
+if __name__ == "__main__":
+    for i in range(1):
+        mrng = MultithreadedRNG(100000000, seed=12345)
+        # values = np.empty(100000000)
+        # rg = default_rng()
+        t1 = time.time()
+        for i in range(100000):
+            mrng.fill()
+        # rg.standard_normal(out=values)
+        t2 = time.time()
+        print((t2 - t1) / 100)

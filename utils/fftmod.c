@@ -6,7 +6,7 @@
 #include <fftw3.h>
 //module load intel/2019u3  openmpi/4.0.1 fftw/3.3.10 python/3.8.5
 //icc -std=c99 -O3 -xHost -shared -o libpfb.so -fPIC -fopenmp fftmod.c -lfftw3_omp -lm
-// gcc -shared -o libpfb.so -fPIC -fopenmp fftmod.c -lfftw3 -lm
+//gcc -std=c99 -O3 -march=native -shared -o libpfb.so -fPIC -fopenmp fftmod.c -lfftw3_omp -lm
 // void myfft(complex *input, complex *output, int64_t n)
 // {   
 //     if(fftw_init_threads()) {
@@ -21,6 +21,19 @@
 //         printf("something went wrong, sorry");
 //     }
 // }
+
+int set_threaded(int nthread)
+{
+  if (nthread<0) {
+    nthread=omp_get_num_threads();
+  }
+  if(fftw_init_threads()){
+    printf("Set FFTW to have %d threads.\n",nthread);
+  }
+  else{
+    printf("something went wrong during thread init");
+  }
+}
 
 void test(double* input, double* output, int64_t nrows, int64_t ncols){
     //  for(int i =0; i<n;i++){
@@ -66,27 +79,10 @@ void test(double* input, double* output, int64_t nrows, int64_t ncols){
 }
 
 void pfb(double *timestream, double *spectra, double *window, const int64_t nspec, const int64_t nchan, const int64_t ntap){
-    // printf("entered\n");
     int64_t lblock = 2*nchan;
+    int nthreads = omp_get_num_threads();
     // double *pseudo_ts;
     // pseudo_ts = (double *)malloc(sizeof(double)*lblock*nspec);
-    // init with 0
-    // #pragma omp parallel for
-    // for(int i=0; i<nspec; i++){
-    //     // printf("\n");
-    //     for(int j=0; j<lblock; j++){
-    //         spectra[i*(lblock+2)+ j]=timestream[i*lblock+j];
-    //         // printf("%f ",spectra[i*lblock+ j] );
-    //     }
-    // }
-    // printf("\n");
-    // printf("LBLOCK %ld, NTAP %ld, NSPEC %ld\n\n", lblock, ntap, nspec);
-    // for(int i=0; i<13; i++){
-    //     printf("\n");
-    //     for(int j=0; j<lblock; j++){
-    //         printf("%f ",timestream[i*lblock + j]);
-    //     }
-    // }
     #pragma omp parallel for
     for(int i=0; i<nspec; i++){
         for(int j=0; j<lblock; j++){
@@ -98,56 +94,14 @@ void pfb(double *timestream, double *spectra, double *window, const int64_t nspe
             }
         }
     }
-    
-    // for(int i=0; i<nspec; i++){
-    //     printf("\n");
-    //     for(int j=0; j<lblock; j++){
-    //         printf("%lf ",pseudo_ts[i*lblock + j]);
-    //     }
-    // }
-    // printf("\nreached the end\n");
-    if(fftw_init_threads()) {
         fftw_plan p;
-        fftw_plan_with_nthreads(40);
+        fftw_plan_with_nthreads(nthreads);
         int n[] = {lblock}; /* 1d transforms of length 10 */
         p = fftw_plan_many_dft_r2c(1, n, nspec, spectra, NULL, 1, lblock+2, (fftw_complex *)spectra, NULL, 1, nchan+1, FFTW_ESTIMATE);
         fftw_execute(p);
         fftw_destroy_plan(p);
-        fftw_cleanup_threads();
-    }
-    else {
-        printf("something went wrong, sorry");
-    }
-    // free(pseudo_ts);
 }
-    
 
-//void test(complex *timestream, complex *spectra, const int64_t nspec){
-    // printf("entered\n");
-    //int64_t lblock = 2*nchan;
-    //double *pseudo_ts;
-   // pseudo_ts = (double *)malloc(sizeof(double)*lblock*nspec);
-    //init with 0
-    // #pragma omp parallel for
-   //  for(int i=0; i<nspec; i++){
-         // printf("\n");
-    //     for(int j=0; j<lblock; j++){
-    //         pseudo_ts[i*lblock + j]=0;
-    //     }
-    // }
-    // printf("LBLOCK %ld, NTAP %ld, NSPEC %ld\n\n", lblock, ntap, nspec);
-  //  for(int i=0; i<nspec+3; i++){
-    //     printf("\n");
-    //     for(int j=0; j<lblock; j++){
-    //         printf("%f ",timestream[i*lblock + j]);
-    //     }
-    //}
-    // for(int i=0; i<nspec; i++){
-    //     printf("\n");
-    //     for(int j=0; j<lblock; j++){
-    //         printf("%lf ",pseudo_ts[i*lblock + j]);
-    //     }
-    // }
-    // printf("\nreached the end\n");
-    //free(pseudo_ts);
-//}
+void cleanup_threads(){
+  fftw_cleanup_threads();
+}

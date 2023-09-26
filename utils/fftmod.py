@@ -57,7 +57,7 @@ def get_interp_xcorr(coarse_xcorr, chan, osamp=1):
     coarse_xcorr: ndarray
         1-D array of coarse xcorr of one channel.
     chan : int
-        Channel for the passed coarse xcorr. 
+        Channel for the passed coarse xcorr.
     osamp: int
         Number of times to over sample over the default 4 ns time-resolution. E.g. osamp=4 means 1 ns time-resolution.
 
@@ -73,7 +73,7 @@ def get_interp_xcorr(coarse_xcorr, chan, osamp=1):
     sample_no = np.arange(0, coarse_xcorr.shape[0] * 4096 * osamp)
     print("Total upsampled timestream samples in this coarse chunk =", sample_no.shape)
     coarse_sample_no = np.arange(0, coarse_xcorr.shape[0]) * 4096 * osamp
-    uph = np.unwrap(np.angle(coarse_xcorr)) #uph = unwrapped phase
+    uph = np.unwrap(np.angle(coarse_xcorr))  # uph = unwrapped phase
     newphase = 2 * np.pi * freq * np.arange(0, coarse_xcorr.shape[0]) + uph
     newphase = np.interp(sample_no, coarse_sample_no, newphase)
     cs = CubicSpline(coarse_sample_no, np.abs(coarse_xcorr))
