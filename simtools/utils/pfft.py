@@ -2,6 +2,8 @@ import ctypes
 import numpy as np
 import os
 from contextlib import contextmanager
+import numba as nb
+from scipy import fft
 
 nb.config.THREADING_LAYER_PRIORITY = ["omp", "tbb", "workqueue"]
 NUM_CPU = os.cpu_count()
@@ -42,20 +44,20 @@ def parallelize_fft(nthreads):
     mylib.cleanup_threads()
 
 
-def rfft_1d(input):
-    n = input.shape[0]
-    output = np.empty(n // 2 + 1, dtype="complex128", order="c")
-    mylib.myfft(input.ctypes.data, output.ctypes.data, n)
-    return output
+def rfft_1d(dat):
+    n = dat.shape[0]
+    datft = np.empty(n // 2 + 1, dtype="complex128", order="c")
+    mylib.fft_r2c_1d(dat.ctypes.data, datft.ctypes.data, n)
+    return datft
 
 
-def irfft_1d(input, preserve_input=0):
-    n = input.shape[0]
-    if n % 2 == 0:
+def irfft_1d(datft, preserve_input=0):
+    if datft.shape[0] % 2 == 0:
         raise ValueError("you're doing a complex to real rfft. n should've been odd?")
-    output = np.empty(2 * (n - 1), dtype="float64", order="c")
-    mylib.myfft(input.ctypes.data, output.ctypes.data, n, preserve_input)
-    return output
+    n = 2 * (datft.shape[0] - 1)
+    dat = np.empty(n, dtype="float64", order="c")
+    mylib.fft_c2r_1d(datft.ctypes.data, dat.ctypes.data, n, preserve_input)
+    return dat
 
 
 def mytest():
@@ -111,7 +113,7 @@ def pypfb(timestream, nchan=2048, ntap=4, window=sinc_hanning, fast=False):
         raise Exception("nblock is {}, should be integer".format(nblock))
 
     # initialize array for spectrum
-    spec = np.zeros((nblock, nchan + 1), dtype=np.complex128)
+    spec = np.zeros((nblock, lblock), dtype="float64")
 
     # window function
     w = window(ntap, lblock)
@@ -126,7 +128,7 @@ def pypfb(timestream, nchan=2048, ntap=4, window=sinc_hanning, fast=False):
         for bi in range(nblock):
             spec[bi] = np.fft.rfft(
                 np.sum(
-                    (timestream[bi * lblock : (bi + ntap) * lblock] * window).reshape(
+                    (timestream[bi * lblock : (bi + ntap) * lblock] * w).reshape(
                         ntap, lblock
                     ),
                     axis=0,
@@ -137,6 +139,7 @@ def pypfb(timestream, nchan=2048, ntap=4, window=sinc_hanning, fast=False):
 
 @nb.njit(parallel=True)
 def fill_blocks(spec, timestream, window, nblock, lblock, ntap):
+    print(nblock, lblock, ntap, timestream.shape, spec.shape)
     for bi in nb.prange(nblock):
         spec[bi] = np.sum(
             (timestream[bi * lblock : (bi + ntap) * lblock] * window).reshape(

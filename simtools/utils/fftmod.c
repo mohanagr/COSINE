@@ -44,7 +44,7 @@ void fft_c2r_1d(fftw_complex *datft,double *dat, int64_t n, int preserve_input)
     plan=fftw_plan_dft_c2r_1d(n,datft,dat,FFTW_FLAG|FFTW_PRESERVE_INPUT);
   }
   else{
-    plan=fftw_plan_dft_c2r_1d(n,datft,dat,FFTW_FLAG|FFTW_PRESERVE_INPUT);
+    plan=fftw_plan_dft_c2r_1d(n,datft,dat,FFTW_FLAG);
   }
   fftw_execute(plan);
   fftw_destroy_plan(plan);
@@ -70,11 +70,11 @@ void test(double* input, double* output, int64_t nrows, int64_t ncols){
     // complex *cp;
     // cp = (complex *) input;
     int n[] = {4};
-    fftw_plan p;
+ 
     // const int inembed[] = {6};
     // const int oembed[] = {4};
     
-    printf("nrows %d ncols %d", nrows, ncols);
+    printf("nrows %ld ncols %ld", nrows, ncols);
      for(int i =0; i<nrows;i++){
       for(int j =0; j<ncols; j++)
       {
@@ -101,6 +101,7 @@ void test(double* input, double* output, int64_t nrows, int64_t ncols){
     //  }
     
     // p = fftw_plan_dft_r2c_1d(n, output, (fftw_complex*)output, FFTW_ESTIMATE);
+       fftw_plan p;
     p=fftw_plan_many_dft_r2c(1,n,2,output,NULL,1,6,(fftw_complex *)output,NULL,1,3,FFTW_ESTIMATE);
     fftw_execute(p);
     fftw_destroy_plan(p);
@@ -121,11 +122,17 @@ void pfb(double *timestream, double *spectra, double *window, const int64_t nspe
             }
         }
     }
+  //   if(fftw_init_threads()){
+  //   fftw_plan_with_nthreads(8);
+  //   // printf("Set FFTW to have %d threads.\n",nthreads);
+  // }
         fftw_plan p;
+        
         int n[] = {lblock}; /* 1d transforms of length 10 */
         p = fftw_plan_many_dft_r2c(1, n, nspec, spectra, NULL, 1, lblock+2, (fftw_complex *)spectra, NULL, 1, nchan+1, FFTW_ESTIMATE);
         fftw_execute(p);
         fftw_destroy_plan(p);
+        // fftw_cleanup_threads();
 }
 
 void cleanup_threads(){
