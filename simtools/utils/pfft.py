@@ -125,21 +125,16 @@ def pypfb(timestream, nchan=2048, ntap=4, window=sinc_hanning, fast=False):
         ):  # generally os.cpu_count() returns 2x physical cores
             spec = fft.rfft(spec, axis=1)
     else:
+        # print(spec.shape, lblock)
         for bi in range(nblock):
-            spec[bi] = np.fft.rfft(
-                np.sum(
-                    (timestream[bi * lblock : (bi + ntap) * lblock] * w).reshape(
-                        ntap, lblock
-                    ),
-                    axis=0,
-                )
-            )
+            spec[bi,:] = np.sum((timestream[bi * lblock : (bi + ntap) * lblock] * w).reshape(ntap, lblock),axis=0)
+        spec = np.fft.rfft(spec,axis=1)
     return spec
 
 
 @nb.njit(parallel=True)
 def fill_blocks(spec, timestream, window, nblock, lblock, ntap):
-    print(nblock, lblock, ntap, timestream.shape, spec.shape)
+    #print(nblock, lblock, ntap, timestream.shape, spec.shape)
     for bi in nb.prange(nblock):
         spec[bi] = np.sum(
             (timestream[bi * lblock : (bi + ntap) * lblock] * window).reshape(

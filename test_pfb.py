@@ -4,14 +4,14 @@ import numba as nb
 from simtools.utils import pfft, prng
 
 if __name__ == "__main__":
-    rng = prng.MultithreadedRNG(100003 * 4096)
+    rng = prng.MultithreadedRNG(50003 * 4096)
     rng.fill()
     x = rng.values
     lblock = 4096
     # x = np.ones(lblock*5,dtype="float64", order="c")
     # x=np.tile(np.arange(lblock),7).astype("float64")
     print("starting test...")
-    niter = 1
+    niter = 20
     t1 = time.time()
     with pfft.parallelize_fft(8):
         for i in range(niter):
