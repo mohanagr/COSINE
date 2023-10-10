@@ -1,6 +1,6 @@
 import numpy as np
 import numba as nb
-
+from scipy.interpolate import CubicSpline
 
 @nb.njit(parallel=True)
 def make_complex(cmpl, mag, phase):
@@ -27,13 +27,14 @@ def get_coarse_xcorr(f1, f2, chans):
     """
     Nsmall = f1.shape[0]
     print("Shape of passed channelized timestream =", f1.shape)
-    xcorr = np.zeros((2 * Nsmall, len(chans)), dtype="complex128")
+    xcorr = np.zeros((len(chans),2 * Nsmall), dtype="complex128")
     wt = np.zeros(2 * Nsmall)
     wt[:Nsmall] = 1
     n_avg = np.fft.irfft(np.fft.rfft(wt) * np.conj(np.fft.rfft(wt)))
+    print("n_avg is", n_avg)
     for i, chan in enumerate(chans):
         print("processing chan", chan)
-        xcorr[:, i] = np.fft.ifft(
+        xcorr[i, :] = np.fft.ifft(
             np.fft.fft(
                 np.hstack([f1[:, chan].flatten(), np.zeros(Nsmall, dtype="complex128")])
             )
@@ -45,11 +46,11 @@ def get_coarse_xcorr(f1, f2, chans):
                 )
             )
         )
-        xcorr[:, i] = xcorr[:, i] / n_avg
+        xcorr[i, :] = xcorr[i, :] / n_avg
     return xcorr
 
 
-def get_interp_xcorr(coarse_xcorr, chan, osamp=1):
+def get_interp_xcorr(coarse_xcorr, chan, sample_no, coarse_sample_no):
     """Get a upsampled xcorr from coarse_xcorr by adding back the carrier frequency.
 
     Parameters
@@ -68,13 +69,11 @@ def get_interp_xcorr(coarse_xcorr, chan, osamp=1):
     """
     print("coarse shape", coarse_xcorr.shape)
     final_xcorr_cwave = np.empty(
-        coarse_xcorr.shape[0] * 4096 * osamp, dtype="complex128"
+        sample_no.shape[0], dtype="complex128"
     )
-    sample_no = np.arange(0, coarse_xcorr.shape[0] * 4096 * osamp)
     print("Total upsampled timestream samples in this coarse chunk =", sample_no.shape)
-    coarse_sample_no = np.arange(0, coarse_xcorr.shape[0]) * 4096 * osamp
     uph = np.unwrap(np.angle(coarse_xcorr))  # uph = unwrapped phase
-    newphase = 2 * np.pi * freq * np.arange(0, coarse_xcorr.shape[0]) + uph
+    newphase = 2 * np.pi * chan * np.arange(0, coarse_xcorr.shape[0]) + uph
     newphase = np.interp(sample_no, coarse_sample_no, newphase)
     cs = CubicSpline(coarse_sample_no, np.abs(coarse_xcorr))
     newmag = cs(sample_no)

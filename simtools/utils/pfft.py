@@ -38,7 +38,9 @@ mylib.set_threads.argtypes = [ctypes.c_int]
 
 
 @contextmanager
-def parallelize_fft(nthreads):
+def parallelize_fft(nthreads=None):
+    if not nthreads:
+        nthreads=NUM_CPU//2
     mylib.set_threads(nthreads)
     yield
     mylib.cleanup_threads()
