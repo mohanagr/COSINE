@@ -26,14 +26,14 @@ def get_coarse_xcorr(f1, f2, chans):
         xcorr of each channel's timestream. 2*n_spectrum x n_channel complex array.
     """
     Nsmall = f1.shape[0]
-    print("Shape of passed channelized timestream =", f1.shape)
+    #print("Shape of passed channelized timestream =", f1.shape)
     xcorr = np.zeros((len(chans),2 * Nsmall), dtype="complex128")
     wt = np.zeros(2 * Nsmall)
     wt[:Nsmall] = 1
     n_avg = np.fft.irfft(np.fft.rfft(wt) * np.conj(np.fft.rfft(wt)))
-    print("n_avg is", n_avg)
+    #print("n_avg is", n_avg)
     for i, chan in enumerate(chans):
-        print("processing chan", chan)
+        #print("processing chan", chan)
         xcorr[i, :] = np.fft.ifft(
             np.fft.fft(
                 np.hstack([f1[:, chan].flatten(), np.zeros(Nsmall, dtype="complex128")])

@@ -105,9 +105,9 @@ class Spectra:
 
     def generate(self):
         with pfft.parallelize_fft():
-            t1=time.time()
+            #t1=time.time()
             self.populate()
-            t2=time.time()
-            print("generation took:", t2-t1)
+            #t2=time.time()
+            #print("generation took:", t2-t1)
             self.channelize()
         

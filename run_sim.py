@@ -51,10 +51,11 @@ if __name__ == "__main__":
     print(npfb, acclens, channels, bandwidth, delay, snr, chan_offset)
     f=plt.gcf()
     f.set_size_inches(10,4)
-    niter=10
+    niter=100
     peak_heights = np.zeros(niter)
     coarse_peak_heights = np.zeros(niter)
     num_conf_peaks = np.zeros(niter)
+    t1=time.time()
     for i in range(niter):
         print("ON ITERATION", i+1)
         myspec = Spectra(npfb, acclens[0], channels, bandwidth, delay, snr, chan_offset)
@@ -97,7 +98,8 @@ if __name__ == "__main__":
         # plt.clf()
         # plt.plot(final_xcorr.real[m-lims:m+lims],"-*")
         # plt.show()
-    
+    t2=time.time()
+    print(f"time taken for {niter} iterations = ", t2-t1)
     print("peak_heights are", peak_heights)
     # print("coarse peak heights are", coarse_peak_heights)
     print("spread", np.std(peak_heights))
