@@ -14,9 +14,10 @@ def run_sim(spectra, osamp=1):
     # print("ABLE TO ACCESS MYSPEC",myspec)
     xcorr2sum = np.sum(xcorrtime2,axis=0)
     # print(np.argmax(xcorr2sum))
-    # plt.title(f"Max at {np.argmax(xcorr2sum[stamp])-dN}")
-    # plt.plot(xcorr2sum[stamp].real)
-    # plt.show()
+    plt.title(f"Max at {np.argmax(xcorr2sum[stamp])-dN}")
+    plt.plot(xcorr2sum[stamp].real)
+    plt.show()
+    print(xcorr2sum[stamp])
 
     # dN=200
     # stamp=slice(N//2-dN,N//2+dN)
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     print(npfb, acclens, channels, bandwidth, delay, snr, chan_offset)
     f=plt.gcf()
     f.set_size_inches(10,4)
-    niter=100
+    niter=1
     peak_heights = np.zeros(niter)
     coarse_peak_heights = np.zeros(niter)
     num_conf_peaks = np.zeros(niter)

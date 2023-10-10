@@ -46,7 +46,7 @@ def get_coarse_xcorr(f1, f2, chans):
                 )
             )
         )
-        xcorr[i, :] = xcorr[i, :] / n_avg
+        xcorr[i, :] = xcorr[i, :] * 2 * Nsmall / n_avg # get rid of the N introduced by ifft first then divide by correct N
     return xcorr
 
 
